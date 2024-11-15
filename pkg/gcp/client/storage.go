@@ -26,14 +26,13 @@ const (
 	errCodeBucketAlreadyOwnedByYou = 409
 )
 
-// ImmutableSettings holds configuration for an immutable backup policy.
+// ImmutableSettings represents the settings for immutable storage.
 type ImmutableSettings struct {
-	RetentionType   string        `json:"retentionType"`
-	RetentionPeriod time.Duration `json:"-"`
+	RetentionType   string
+	RetentionPeriod time.Duration
 }
 
-// ImmutableSettingsJSON is used for initial JSON unmarshaling.
-// This struct reflects the exact JSON structure.
+// ImmutableSettingsJSON is used for JSON unmarshalling of immutable settings.
 type ImmutableSettingsJSON struct {
 	RetentionType   string `json:"retentionType"`
 	RetentionPeriod string `json:"retentionPeriod"`
