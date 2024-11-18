@@ -112,7 +112,7 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 		}
 	}
 
-	if err := s.client.Bucket(bucketName).Create(ctx, s.serviceAccount.ProjectID, &storage.BucketAttrs{
+	err := s.client.Bucket(bucketName).Create(ctx, s.serviceAccount.ProjectID, &storage.BucketAttrs{
 		Name:            bucketName,
 		Location:        region,
 		RetentionPolicy: retentionPolicy,
@@ -122,8 +122,24 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 		SoftDeletePolicy: &storage.SoftDeletePolicy{
 			RetentionDuration: 0,
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == errCodeBucketAlreadyOwnedByYou {
+			// Bucket already exists, update retention policy if necessary
+			bucket := s.client.Bucket(bucketName)
+			attrs, err := bucket.Attrs(ctx)
+			if err != nil {
+				return err
+			}
+			if imSettings != nil && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != imSettings.RetentionPeriod) {
+				// Update retention policy
+				_, err = bucket.Update(ctx, storage.BucketAttrsToUpdate{
+					RetentionPolicy: retentionPolicy,
+				})
+				if err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 		return err
