@@ -9,15 +9,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/pkg/apis/core"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	gcpclient "github.com/gardener/gardener-extension-provider-gcp/pkg/gcp/client"
-	"github.com/gardener/gardener/extensions/pkg/webhook"
 )
 
 // NewSeedValidator returns a new Validator for Seed resources,

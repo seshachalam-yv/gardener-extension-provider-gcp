@@ -9,16 +9,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gardener/gardener-extension-provider-gcp/pkg/admission/validator"
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
+	"github.com/gardener/gardener/pkg/apis/core"
 	mockclient "github.com/gardener/gardener/third_party/mock/controller-runtime/client"
 	mockmanager "github.com/gardener/gardener/third_party/mock/controller-runtime/manager"
-	"go.uber.org/mock/gomock"
-
-	"github.com/gardener/gardener/pkg/apis/core"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/gardener/gardener-extension-provider-gcp/pkg/admission/validator"
 )
 
 var _ = Describe("Seed Validator", func() {

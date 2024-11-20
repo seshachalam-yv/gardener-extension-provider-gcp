@@ -8,12 +8,13 @@ import (
 	"context"
 
 	"cloud.google.com/go/storage"
-	"github.com/gardener/gardener-extension-provider-gcp/pkg/gcp"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/gardener/gardener-extension-provider-gcp/pkg/gcp"
 )
 
 const (
@@ -71,7 +72,7 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 	var retentionPolicy *storage.RetentionPolicy
 	if imSettings != nil {
 		retentionPolicy = &storage.RetentionPolicy{
-			RetentionPeriod: imSettings.RetentionPeriod.ToDuration(),
+			RetentionPeriod: imSettings.RetentionPeriod.toDuration(),
 			IsLocked:        true,
 		}
 	}
@@ -95,7 +96,7 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 			if err != nil {
 				return err
 			}
-			if imSettings != nil && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != imSettings.RetentionPeriod.ToDuration()) {
+			if imSettings != nil && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != imSettings.RetentionPeriod.toDuration()) {
 				_, err = bucket.Update(ctx, storage.BucketAttrsToUpdate{
 					RetentionPolicy: retentionPolicy,
 				})
