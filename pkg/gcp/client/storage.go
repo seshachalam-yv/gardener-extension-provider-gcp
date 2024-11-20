@@ -8,13 +8,12 @@ import (
 	"context"
 
 	"cloud.google.com/go/storage"
+	"github.com/gardener/gardener-extension-provider-gcp/pkg/gcp"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/gardener/gardener-extension-provider-gcp/pkg/gcp"
 )
 
 const (
@@ -24,7 +23,7 @@ const (
 // StorageClient is an interface which must be implemented by GCS clients.
 type StorageClient interface {
 	// GCS wrappers
-	CreateBucketIfNotExists(ctx context.Context, bucketName, region string) error
+	CreateBucketIfNotExists(ctx context.Context, bucketName, region string, imSettings *Immutability) error
 	DeleteBucketIfExists(ctx context.Context, bucketName string) error
 	DeleteObjectsWithPrefix(ctx context.Context, bucketName, prefix string) error
 }
@@ -56,18 +55,54 @@ func NewStorageClientFromSecretRef(ctx context.Context, c client.Client, secretR
 	return NewStorageClient(ctx, serviceAccount)
 }
 
-func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName, region string) error {
-	if err := s.client.Bucket(bucketName).Create(ctx, s.serviceAccount.ProjectID, &storage.BucketAttrs{
-		Name:     bucketName,
-		Location: region,
+// CreateBucketIfNotExists creates a new GCS bucket if it does not already exist.
+// If the bucket already exists and the provided immutability settings differ from the current
+// retention policy, the retention policy is updated accordingly.
+//
+// Parameters:
+//   - ctx: The context for the request.
+//   - bucketName: The name of the bucket to create or update.
+//   - region: The region where the bucket will be created.
+//   - imSettings: The immutability settings to apply to the bucket. If nil, no retention policy is set.
+//
+// Returns:
+//   - error: An error if the bucket creation or update fails, or nil if successful.
+func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName, region string, imSettings *Immutability) error {
+	var retentionPolicy *storage.RetentionPolicy
+	if imSettings != nil {
+		retentionPolicy = &storage.RetentionPolicy{
+			RetentionPeriod: imSettings.RetentionPeriod.ToDuration(),
+			IsLocked:        true,
+		}
+	}
+
+	err := s.client.Bucket(bucketName).Create(ctx, s.serviceAccount.ProjectID, &storage.BucketAttrs{
+		Name:            bucketName,
+		Location:        region,
+		RetentionPolicy: retentionPolicy,
 		UniformBucketLevelAccess: storage.UniformBucketLevelAccess{
 			Enabled: true,
 		},
 		SoftDeletePolicy: &storage.SoftDeletePolicy{
 			RetentionDuration: 0,
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		if gerr, ok := err.(*googleapi.Error); ok && gerr.Code == errCodeBucketAlreadyOwnedByYou {
+			// Bucket already exists, update retention policy if necessary
+			bucket := s.client.Bucket(bucketName)
+			attrs, err := bucket.Attrs(ctx)
+			if err != nil {
+				return err
+			}
+			if imSettings != nil && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != imSettings.RetentionPeriod.ToDuration()) {
+				_, err = bucket.Update(ctx, storage.BucketAttrsToUpdate{
+					RetentionPolicy: retentionPolicy,
+				})
+				if err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 		return err
