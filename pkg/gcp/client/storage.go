@@ -25,7 +25,7 @@ const (
 // StorageClient is an interface which must be implemented by GCS clients.
 type StorageClient interface {
 	// GCS wrappers
-	CreateBucketIfNotExists(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error
+	CreateOrGetAndUpdateBucket(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error
 	DeleteBucketIfExists(ctx context.Context, bucketName string) error
 	DeleteObjectsWithPrefix(ctx context.Context, bucketName, prefix string) error
 }
@@ -57,7 +57,7 @@ func NewStorageClientFromSecretRef(ctx context.Context, c client.Client, secretR
 	return NewStorageClient(ctx, serviceAccount)
 }
 
-// CreateBucketIfNotExists creates a new GCS bucket if it does not already exist.
+// CreateOrGetAndUpdateBucket creates a new GCS bucket if it does not already exist.
 // If the bucket already exists and the provided immutability settings differ from the current
 // retention policy, the retention policy is updated accordingly.
 //
@@ -69,7 +69,7 @@ func NewStorageClientFromSecretRef(ctx context.Context, c client.Client, secretR
 //
 // Returns:
 //   - error: An error if the bucket creation or update fails, or nil if successful.
-func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error {
+func (s *storageClient) CreateOrGetAndUpdateBucket(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error {
 	var retentionPolicy *storage.RetentionPolicy
 	if config != nil {
 		retentionPolicy = &storage.RetentionPolicy{
@@ -97,7 +97,7 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 			if err != nil {
 				return err
 			}
-			if config.Immutability != (apisgcp.ImmutableConfig{}) && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != config.Immutability.RetentionPeriod.Duration) {
+			if config != nil && config.Immutability != (apisgcp.ImmutableConfig{}) && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != config.Immutability.RetentionPeriod.Duration) {
 				_, err = bucket.Update(ctx, storage.BucketAttrsToUpdate{
 					RetentionPolicy: retentionPolicy,
 				})

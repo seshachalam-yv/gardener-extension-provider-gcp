@@ -22,12 +22,8 @@ type BackupBucketConfig struct {
 // ImmutableConfig represents the immutability configuration for a backup bucket.
 type ImmutableConfig struct {
 	// RetentionType specifies the type of retention for the backup bucket.
-	// +kubebuilder:validation:Enum=bucket
-	// +kubebuilder:validation:Immutable
 	RetentionType string `json:"retentionType"`
 
 	// RetentionPeriod specifies the retention period for the backup bucket.
-	// +kubebuilder:validation:Minimum=1s
-	// +kubebuilder:validation:XValidation:rule="self > duration('0s')",message="RetentionPeriod must be a positive duration like '1h', '30m', etc."
 	RetentionPeriod metav1.Duration `json:"retentionPeriod"`
 }

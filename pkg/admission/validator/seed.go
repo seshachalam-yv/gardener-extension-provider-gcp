@@ -12,11 +12,13 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/gardener/gardener-extension-provider-gcp/pkg/admission"
 	"github.com/gardener/gardener-extension-provider-gcp/pkg/apis/gcp"
+	gcpvalidation "github.com/gardener/gardener-extension-provider-gcp/pkg/apis/gcp/validation"
 )
 
 // NewSeedValidator returns a new Validator for Seed resources,
@@ -60,9 +62,14 @@ func (s *seedValidator) Validate(ctx context.Context, newObj, oldObj client.Obje
 // validateCreate validates the Seed object upon creation.
 // It checks if immutable settings are provided and validates them to ensure they meet the required criteria.
 func (s *seedValidator) validateCreate(newSeed *core.Seed) error {
-	_, err := admission.DecodeBackupBucketConfig(s.decoder, newSeed.Spec.Backup.ProviderConfig)
+	backupBucketConfig, err := admission.DecodeBackupBucketConfig(s.decoder, newSeed.Spec.Backup.ProviderConfig)
 	if err != nil {
 		return fmt.Errorf("error decoding BackupBucketConfig: %w", err)
+	}
+
+	allErrs := gcpvalidation.ValidateBackupBucketConfig(backupBucketConfig, field.NewPath("spec").Child("backup").Child("providerConfig"))
+	if len(allErrs) > 0 {
+		return fmt.Errorf("validation failed: %w", allErrs.ToAggregate())
 	}
 
 	return nil
@@ -84,6 +91,11 @@ func (s *seedValidator) validateUpdate(_ context.Context, oldSeed, newSeed *core
 		return fmt.Errorf("error decoding new BackupBucketConfig: %w", err)
 	}
 
+	allErrs := gcpvalidation.ValidateBackupBucketConfig(newBackupBucketConfig, field.NewPath("spec").Child("backup").Child("providerConfig"))
+	if len(allErrs) > 0 {
+		return fmt.Errorf("validation failed: %w", allErrs.ToAggregate())
+	}
+
 	// Ensure that immutable settings are not disabled
 	if (newBackupBucketConfig == nil || newBackupBucketConfig.Immutability == (gcp.ImmutableConfig{})) && oldbackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) {
 		return fmt.Errorf("disabling immutable settings is not allowed")
@@ -93,11 +105,6 @@ func (s *seedValidator) validateUpdate(_ context.Context, oldSeed, newSeed *core
 	if newBackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) && oldbackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) {
 		if newBackupBucketConfig.Immutability.RetentionPeriod.Duration < oldbackupBucketConfig.Immutability.RetentionPeriod.Duration {
 			return fmt.Errorf("reducing the retention period from %v to %v is not allowed. Please ensure the new retention period is greater than or equal to the old retention period", oldbackupBucketConfig.Immutability.RetentionPeriod.Duration, newBackupBucketConfig.Immutability.RetentionPeriod.Duration)
-		}
-
-		// Ensure the retention type is not changed
-		if newBackupBucketConfig.Immutability.RetentionType != oldbackupBucketConfig.Immutability.RetentionType {
-			return fmt.Errorf("modifying the retention type from '%s' to '%s' is not allowed", oldbackupBucketConfig.Immutability.RetentionType, newBackupBucketConfig.Immutability.RetentionType)
 		}
 	}
 

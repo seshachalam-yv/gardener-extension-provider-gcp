@@ -24,7 +24,7 @@ import (
 	apisgcpv1alpha1 "github.com/gardener/gardener-extension-provider-gcp/pkg/apis/gcp/v1alpha1"
 )
 
-var _ = FDescribe("Seed Validator", func() {
+var _ = Describe("Seed Validator", func() {
 	var (
 		mgr           *mockmanager.MockManager
 		seedValidator extensionswebhook.Validator
@@ -119,6 +119,131 @@ var _ = FDescribe("Seed Validator", func() {
 			},
 			errors.New("disabling immutable settings is not allowed"),
 		),
+
+		Entry("should allow update when immutable settings are unchanged",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			nil,
+		),
+		Entry("should not allow update when retention period is reduced",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h"}}`),
+						},
+					},
+				},
+			},
+			errors.New("reducing the retention period from 96h0m0s to 48h0m0s is not allowed. Please ensure the new retention period is greater than or equal to the old retention period"),
+		),
+		Entry("should not allow disabling immutable settings",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: nil,
+					},
+				},
+			},
+			errors.New("disabling immutable settings is not allowed"),
+		),
+		Entry("should return error when old BackupBucketConfig decoding fails",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`invalid`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			errors.New("error decoding old BackupBucketConfig: couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }"),
+		),
+		Entry("should return error when new BackupBucketConfig decoding fails",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`invalid`),
+						},
+					},
+				},
+			},
+			errors.New("error decoding new BackupBucketConfig: couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }"),
+		),
+		Entry("should return error when new BackupBucketConfig validation fails",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"invalid","retentionPeriod":"96h"}}`),
+						},
+					},
+				},
+			},
+			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionType: Invalid value: \"invalid\": retentionType must be 'bucket'"),
+		),
 	)
 
 	var _ = DescribeTable("ValidateCreate",
@@ -167,7 +292,7 @@ var _ = FDescribe("Seed Validator", func() {
 					},
 				},
 			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"invalid\": retentionPeriod must be a positive duration like '1h', '30m', etc."),
+			errors.New("error decoding BackupBucketConfig: time: invalid duration \"invalid\""),
 		),
 		Entry("should not allow creation with negative retention period",
 			&core.Seed{
@@ -179,7 +304,7 @@ var _ = FDescribe("Seed Validator", func() {
 					},
 				},
 			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"-96h\": retentionPeriod must be a positive duration like '1h', '30m', etc."),
+			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"-96h0m0s\": retentionPeriod must be a positive duration like '1h', '30m', etc"),
 		),
 		Entry("should allow creation without immutable settings",
 			&core.Seed{

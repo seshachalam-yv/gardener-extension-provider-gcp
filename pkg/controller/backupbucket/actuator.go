@@ -42,7 +42,7 @@ func (a *actuator) Reconcile(ctx context.Context, _ logr.Logger, bb *extensionsv
 		return util.DetermineError(err, helper.KnownCodes)
 	}
 
-	return util.DetermineError(storageClient.CreateBucketIfNotExists(ctx, bb.Name, bb.Spec.Region, backupBucketConfig), helper.KnownCodes)
+	return util.DetermineError(storageClient.CreateOrGetAndUpdateBucket(ctx, bb.Name, bb.Spec.Region, backupBucketConfig), helper.KnownCodes)
 }
 
 func (a *actuator) Delete(ctx context.Context, _ logr.Logger, bb *extensionsv1alpha1.BackupBucket) error {
