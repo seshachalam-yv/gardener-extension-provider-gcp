@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	apisgcp "github.com/gardener/gardener-extension-provider-gcp/pkg/apis/gcp"
 	"github.com/gardener/gardener-extension-provider-gcp/pkg/gcp"
 )
 
@@ -24,7 +25,7 @@ const (
 // StorageClient is an interface which must be implemented by GCS clients.
 type StorageClient interface {
 	// GCS wrappers
-	CreateBucketIfNotExists(ctx context.Context, bucketName, region string, imSettings *Immutability) error
+	CreateBucketIfNotExists(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error
 	DeleteBucketIfExists(ctx context.Context, bucketName string) error
 	DeleteObjectsWithPrefix(ctx context.Context, bucketName, prefix string) error
 }
@@ -68,11 +69,11 @@ func NewStorageClientFromSecretRef(ctx context.Context, c client.Client, secretR
 //
 // Returns:
 //   - error: An error if the bucket creation or update fails, or nil if successful.
-func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName, region string, imSettings *Immutability) error {
+func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName, region string, config *apisgcp.BackupBucketConfig) error {
 	var retentionPolicy *storage.RetentionPolicy
-	if imSettings != nil {
+	if config != nil {
 		retentionPolicy = &storage.RetentionPolicy{
-			RetentionPeriod: imSettings.RetentionPeriod.toDuration(),
+			RetentionPeriod: config.Immutability.RetentionPeriod.Duration,
 			IsLocked:        true,
 		}
 	}
@@ -96,7 +97,7 @@ func (s *storageClient) CreateBucketIfNotExists(ctx context.Context, bucketName,
 			if err != nil {
 				return err
 			}
-			if imSettings != nil && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != imSettings.RetentionPeriod.toDuration()) {
+			if config.Immutability != (apisgcp.ImmutableConfig{}) && (attrs.RetentionPolicy == nil || attrs.RetentionPolicy.RetentionPeriod != config.Immutability.RetentionPeriod.Duration) {
 				_, err = bucket.Update(ctx, storage.BucketAttrsToUpdate{
 					RetentionPolicy: retentionPolicy,
 				})

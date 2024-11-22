@@ -10,6 +10,8 @@
 </p>
 Resource Types:
 <ul><li>
+<a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.BackupBucketConfig">BackupBucketConfig</a>
+</li><li>
 <a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.CloudProfileConfig">CloudProfileConfig</a>
 </li><li>
 <a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.ControlPlaneConfig">ControlPlaneConfig</a>
@@ -18,6 +20,51 @@ Resource Types:
 </li><li>
 <a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.WorkerConfig">WorkerConfig</a>
 </li></ul>
+<h3 id="gcp.provider.extensions.gardener.cloud/v1alpha1.BackupBucketConfig">BackupBucketConfig
+</h3>
+<p>
+<p>BackupBucketConfig represents the configuration for a backup bucket.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+gcp.provider.extensions.gardener.cloud/v1alpha1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>BackupBucketConfig</code></td>
+</tr>
+<tr>
+<td>
+<code>immutability</code></br>
+<em>
+<a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.ImmutableConfig">
+ImmutableConfig
+</a>
+</em>
+</td>
+<td>
+<p>Immutability defines the immutability config for the backup bucket.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="gcp.provider.extensions.gardener.cloud/v1alpha1.CloudProfileConfig">CloudProfileConfig
 </h3>
 <p>
@@ -752,6 +799,49 @@ int32
 </td>
 <td>
 <p>Count is the number of accelerator to be attached</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="gcp.provider.extensions.gardener.cloud/v1alpha1.ImmutableConfig">ImmutableConfig
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#gcp.provider.extensions.gardener.cloud/v1alpha1.BackupBucketConfig">BackupBucketConfig</a>)
+</p>
+<p>
+<p>ImmutableConfig represents the immutability configuration for a backup bucket.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>retentionType</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>RetentionType specifies the type of retention for the backup bucket.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>retentionPeriod</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#duration-v1-meta">
+Kubernetes meta/v1.Duration
+</a>
+</em>
+</td>
+<td>
+<p>RetentionPeriod specifies the retention period for the backup bucket.</p>
 </td>
 </tr>
 </tbody>
