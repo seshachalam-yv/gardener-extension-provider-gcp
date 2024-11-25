@@ -304,7 +304,7 @@ var _ = Describe("Seed Validator", func() {
 					},
 				},
 			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"-96h0m0s\": retentionPeriod must be a positive duration like '1h', '30m', etc"),
+			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"-96h0m0s\": retentionPeriod must be a positive duration greater than 24h"),
 		),
 		Entry("should allow creation without immutable settings",
 			&core.Seed{

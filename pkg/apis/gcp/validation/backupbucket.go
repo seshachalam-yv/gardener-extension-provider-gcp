@@ -5,6 +5,8 @@
 package validation
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	apisgcp "github.com/gardener/gardener-extension-provider-gcp/pkg/apis/gcp"
@@ -21,8 +23,8 @@ func ValidateBackupBucketConfig(config *apisgcp.BackupBucketConfig, fldPath *fie
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("immutability").Child("retentionType"), config.Immutability.RetentionType, "retentionType must be 'bucket'"))
 	}
 
-	if config.Immutability.RetentionPeriod.Duration <= 0 {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("immutability").Child("retentionPeriod"), config.Immutability.RetentionPeriod.Duration.String(), "retentionPeriod must be a positive duration like '1h', '30m', etc"))
+	if config.Immutability.RetentionPeriod.Duration < 24*time.Hour {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("immutability").Child("retentionPeriod"), config.Immutability.RetentionPeriod.Duration.String(), "retentionPeriod must be a positive duration greater than 24h"))
 	}
 
 	return allErrs

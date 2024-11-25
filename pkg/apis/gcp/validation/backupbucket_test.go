@@ -38,7 +38,7 @@ var _ = Describe("ValidateBackupBucketConfig", func() {
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "bucket",
-					RetentionPeriod: metav1.Duration{Duration: 1 * time.Hour},
+					RetentionPeriod: metav1.Duration{Duration: 24 * time.Hour},
 				},
 			}, false),
 		Entry("missing retentionType",
