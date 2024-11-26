@@ -79,89 +79,6 @@ var _ = Describe("Seed Validator", func() {
 			},
 			nil,
 		),
-		Entry("should not allow update when retention period is reduced",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("reducing the retention period from 96h0m0s to 48h0m0s is not allowed. Please ensure the new retention period is greater than or equal to the old retention period"),
-		),
-		Entry("should not allow disabling immutable settings",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: nil,
-					},
-				},
-			},
-			errors.New("disabling immutable settings is not allowed"),
-		),
-
-		Entry("should allow update when immutable settings are unchanged",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should not allow update when retention period is reduced",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("reducing the retention period from 96h0m0s to 48h0m0s is not allowed. Please ensure the new retention period is greater than or equal to the old retention period"),
-		),
 		Entry("should not allow disabling immutable settings",
 			&core.Seed{
 				Spec: core.SeedSpec{
@@ -244,6 +161,111 @@ var _ = Describe("Seed Validator", func() {
 			},
 			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionType: Invalid value: \"invalid\": retentionType must be 'bucket'"),
 		),
+		Entry("should not allow unlocking immutable retention policy lock",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":false}}`),
+						},
+					},
+				},
+			},
+			errors.New("immutable retention policy lock cannot be unlocked once it is locked. Please ensure the retention policy lock remains locked"),
+		),
+		Entry("should allow update when retention period is unchanged and lock remains true",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			nil,
+		),
+		Entry("should allow update when retention period is increased and lock remains true",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"120h","locked":true}}`),
+						},
+					},
+				},
+			},
+			nil,
+		),
+		Entry("should allow decreasing the retention period if it's not locked",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":false}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h","locked":false}}`),
+						},
+					},
+				},
+			},
+			nil,
+		),
+		Entry("should not allow decreasing the retention period if it's locked",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h","locked":true}}`),
+						},
+					},
+				},
+			},
+			errors.New("reducing the retention period from 96h0m0s to 48h0m0s is prohibited when the immutable retention policy is locked. Ensure the new retention period is not shorter than the existing one"),
+		),
 	)
 
 	var _ = DescribeTable("ValidateCreate",
@@ -316,6 +338,17 @@ var _ = Describe("Seed Validator", func() {
 			},
 			nil,
 		),
+		Entry("should allow creation with locked immutable settings",
+			&core.Seed{
+				Spec: core.SeedSpec{
+					Backup: &core.SeedBackup{
+						ProviderConfig: &runtime.RawExtension{
+							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
+						},
+					},
+				},
+			},
+			nil,
+		),
 	)
-
 })

@@ -25,56 +25,64 @@ var _ = Describe("ValidateBackupBucketConfig", func() {
 	})
 
 	DescribeTable("validation cases",
-		func(config *apisgcp.BackupBucketConfig, wantErr bool) {
+		func(config *apisgcp.BackupBucketConfig, wantErr bool, errMsg string) {
 			errs := ValidateBackupBucketConfig(config, fldPath)
 			if wantErr {
 				Expect(errs).NotTo(BeEmpty())
+				Expect(errs[0].Error()).To(ContainSubstring(errMsg))
 			} else {
 				Expect(errs).To(BeEmpty())
 			}
 		},
-		Entry("nil config", nil, false),
+		Entry("nil config", nil, false, ""),
 		Entry("valid config",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "bucket",
 					RetentionPeriod: metav1.Duration{Duration: 24 * time.Hour},
 				},
-			}, false),
+			}, false, ""),
 		Entry("missing retentionType",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "",
 					RetentionPeriod: metav1.Duration{Duration: 1 * time.Hour},
 				},
-			}, true),
+			}, true, "retentionType must be 'bucket'"),
 		Entry("invalid retentionType",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "invalid",
 					RetentionPeriod: metav1.Duration{Duration: 1 * time.Hour},
 				},
-			}, true),
+			}, true, "retentionType must be 'bucket'"),
 		Entry("non-positive retentionPeriod",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "bucket",
 					RetentionPeriod: metav1.Duration{Duration: 0},
 				},
-			}, true),
+			}, true, "retentionPeriod must be a positive duration greater than 24h"),
 		Entry("negative retentionPeriod",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "bucket",
 					RetentionPeriod: metav1.Duration{Duration: -1 * time.Hour},
 				},
-			}, true),
+			}, true, "retentionPeriod must be a positive duration greater than 24h"),
 		Entry("empty retentionPeriod",
 			&apisgcp.BackupBucketConfig{
 				Immutability: apisgcp.ImmutableConfig{
 					RetentionType:   "bucket",
 					RetentionPeriod: metav1.Duration{},
 				},
-			}, true),
+			}, true, "retentionPeriod must be a positive duration greater than 24h"),
+		Entry("retentionPeriod less than 24 hours",
+			&apisgcp.BackupBucketConfig{
+				Immutability: apisgcp.ImmutableConfig{
+					RetentionType:   "bucket",
+					RetentionPeriod: metav1.Duration{Duration: 23 * time.Hour},
+				},
+			}, true, "retentionPeriod must be a positive duration greater than 24h"),
 	)
 })

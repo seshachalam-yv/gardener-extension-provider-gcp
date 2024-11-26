@@ -101,10 +101,15 @@ func (s *seedValidator) validateUpdate(_ context.Context, oldSeed, newSeed *core
 		return fmt.Errorf("disabling immutable settings is not allowed")
 	}
 
-	// Ensure the retention period is not reduced
 	if newBackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) && oldbackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) {
-		if newBackupBucketConfig.Immutability.RetentionPeriod.Duration < oldbackupBucketConfig.Immutability.RetentionPeriod.Duration {
-			return fmt.Errorf("reducing the retention period from %v to %v is not allowed. Please ensure the new retention period is greater than or equal to the old retention period", oldbackupBucketConfig.Immutability.RetentionPeriod.Duration, newBackupBucketConfig.Immutability.RetentionPeriod.Duration)
+		// Ensure the Immutability.Locked cannot be set to false if it was previously set to true
+		if !newBackupBucketConfig.Immutability.Locked && oldbackupBucketConfig.Immutability.Locked {
+			return fmt.Errorf("immutable retention policy lock cannot be unlocked once it is locked. Please ensure the retention policy lock remains locked")
+		}
+
+		// Ensure the retention period is not reduced
+		if newBackupBucketConfig.Immutability.RetentionPeriod.Duration < oldbackupBucketConfig.Immutability.RetentionPeriod.Duration && newBackupBucketConfig.Immutability.Locked {
+			return fmt.Errorf("reducing the retention period from %v to %v is prohibited when the immutable retention policy is locked. Ensure the new retention period is not shorter than the existing one", oldbackupBucketConfig.Immutability.RetentionPeriod.Duration, newBackupBucketConfig.Immutability.RetentionPeriod.Duration)
 		}
 	}
 

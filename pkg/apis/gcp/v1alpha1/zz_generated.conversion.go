@@ -593,6 +593,7 @@ func Convert_gcp_GPU_To_v1alpha1_GPU(in *gcp.GPU, out *GPU, s conversion.Scope) 
 func autoConvert_v1alpha1_ImmutableConfig_To_gcp_ImmutableConfig(in *ImmutableConfig, out *gcp.ImmutableConfig, s conversion.Scope) error {
 	out.RetentionType = in.RetentionType
 	out.RetentionPeriod = in.RetentionPeriod
+	out.Locked = in.Locked
 	return nil
 }
 
@@ -604,6 +605,7 @@ func Convert_v1alpha1_ImmutableConfig_To_gcp_ImmutableConfig(in *ImmutableConfig
 func autoConvert_gcp_ImmutableConfig_To_v1alpha1_ImmutableConfig(in *gcp.ImmutableConfig, out *ImmutableConfig, s conversion.Scope) error {
 	out.RetentionType = in.RetentionType
 	out.RetentionPeriod = in.RetentionPeriod
+	out.Locked = in.Locked
 	return nil
 }
 

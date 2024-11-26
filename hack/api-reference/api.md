@@ -828,7 +828,11 @@ string
 </em>
 </td>
 <td>
-<p>RetentionType specifies the type of retention for the backup bucket.</p>
+<p>RetentionType specifies the type of retention for the backup bucket.
+Currently allowed values are:
+- &ldquo;bucket&rdquo;: The retention policy applies to the entire bucket.
+Future plans include:
+- &ldquo;object&rdquo;: The retention policy applies to individual objects within the bucket.</p>
 </td>
 </tr>
 <tr>
@@ -841,7 +845,21 @@ Kubernetes meta/v1.Duration
 </em>
 </td>
 <td>
-<p>RetentionPeriod specifies the retention period for the backup bucket.</p>
+<p>RetentionPeriod specifies the immutability retention period for the backup bucket.
+The minimum retention period is 24 hours as per Google Cloud Storage requirements.
+Reference: <a href="https://github.com/googleapis/google-cloud-go/blob/3005f5a86c18254e569b8b1782bf014aa62f33cc/storage/bucket.go#L1430-L1434">https://github.com/googleapis/google-cloud-go/blob/3005f5a86c18254e569b8b1782bf014aa62f33cc/storage/bucket.go#L1430-L1434</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>locked</code></br>
+<em>
+bool
+</em>
+</td>
+<td>
+<p>Locked indicates whether the immutable retention policy is locked for the backup bucket.
+If set to true, the retention policy cannot be removed or the retention period reduced, enforcing immutability.</p>
 </td>
 </tr>
 </tbody>
