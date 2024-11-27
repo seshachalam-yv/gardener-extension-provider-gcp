@@ -104,7 +104,7 @@ func (s *storageClient) createBucket(ctx context.Context, bucket *storage.Bucket
 	}
 
 	// Lock the retention policy if specified
-	if retentionPolicy != nil && retentionPolicy.IsLocked {
+	if config != nil && config.Immutability.Locked {
 		if err := s.lockBucketRetentionPolicy(ctx, bucket); err != nil {
 			return fmt.Errorf("failed to lock retention policy for bucket %q: %w", bucket.BucketName(), err)
 		}
@@ -133,6 +133,15 @@ func (s *storageClient) updateBucketIfNeeded(ctx context.Context, bucket *storag
 
 	// Perform the update if needed
 	if isUpdateRequired {
+		// If the desired retention policy is nil and the current retention policy is not nil,
+		// it indicates that the retention policy needs to be removed. To achieve this, set
+		// the RetentionPeriod to 0. This is required by the Google Cloud Storage API to
+		// explicitly update and remove an existing retention policy.
+		// For more details, refer to:
+		// https://github.com/googleapis/google-cloud-go/blob/main/storage/bucket.go#L1172
+		if desiredRetentionPolicy == nil && attrs.RetentionPolicy != nil {
+			desiredRetentionPolicy = &storage.RetentionPolicy{}
+		}
 		bucketAttrsToUpdate := storage.BucketAttrsToUpdate{
 			RetentionPolicy: desiredRetentionPolicy,
 		}
@@ -141,11 +150,10 @@ func (s *storageClient) updateBucketIfNeeded(ctx context.Context, bucket *storag
 		if err != nil {
 			return fmt.Errorf("failed to update retention policy for bucket %q: %w", bucket.BucketName(), err)
 		}
-
 	}
 
 	// Lock the retention policy if specified and not already locked
-	if desiredRetentionPolicy != nil && desiredRetentionPolicy.IsLocked && !attrs.RetentionPolicy.IsLocked {
+	if config != nil && config.Immutability.Locked && !attrs.RetentionPolicy.IsLocked {
 		if err := s.lockBucketRetentionPolicy(ctx, bucket); err != nil {
 			return fmt.Errorf("failed to lock retention policy for bucket %q: %w", bucket.BucketName(), err)
 		}
