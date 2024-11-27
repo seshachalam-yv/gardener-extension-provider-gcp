@@ -16,9 +16,7 @@ import (
 )
 
 var _ = Describe("ValidateBackupBucketConfig", func() {
-	var (
-		fldPath *field.Path
-	)
+	var fldPath *field.Path
 
 	BeforeEach(func() {
 		fldPath = field.NewPath("spec")

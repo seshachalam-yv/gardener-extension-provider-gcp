@@ -73,11 +73,16 @@ var _ = Describe("Seed Validator", func() {
 			config = nil
 		}
 
+		var backup *core.SeedBackup
+		if config != nil {
+			backup = &core.SeedBackup{
+				ProviderConfig: config,
+			}
+		}
+
 		return &core.Seed{
 			Spec: core.SeedSpec{
-				Backup: &core.SeedBackup{
-					ProviderConfig: config,
-				},
+				Backup: backup,
 			},
 		}
 	}
@@ -118,6 +123,10 @@ var _ = Describe("Seed Validator", func() {
 			),
 			Entry("Disabling immutability when not locked",
 				generateSeed("bucket", "96h", false, true),
+				generateSeed("", "", false, false),
+			),
+			Entry("Backup not configured",
+				generateSeed("", "", false, false),
 				generateSeed("", "", false, false),
 			),
 		)
@@ -188,6 +197,9 @@ var _ = Describe("Seed Validator", func() {
 			),
 			Entry("Retention period exactly at minimum (24h)",
 				generateSeed("bucket", "24h", false, true),
+			),
+			Entry("Backup not configured",
+				generateSeed("", "", false, false),
 			),
 		)
 

@@ -39,7 +39,7 @@ func (a *actuator) Reconcile(ctx context.Context, _ logr.Logger, bb *extensionsv
 
 	backupBucketConfig, err := admission.DecodeBackupBucketConfig(serializer.NewCodecFactory(a.client.Scheme(), serializer.EnableStrict).UniversalDecoder(), bb.Spec.ProviderConfig)
 	if err != nil {
-		return util.DetermineError(err, helper.KnownCodes)
+		return err
 	}
 
 	return util.DetermineError(storageClient.CreateOrUpdateBucket(ctx, bb.Name, bb.Spec.Region, backupBucketConfig), helper.KnownCodes)

@@ -830,9 +830,7 @@ string
 <td>
 <p>RetentionType specifies the type of retention for the backup bucket.
 Currently allowed values are:
-- &ldquo;bucket&rdquo;: The retention policy applies to the entire bucket.
-Future plans include:
-- &ldquo;object&rdquo;: The retention policy applies to individual objects within the bucket.</p>
+- &ldquo;bucket&rdquo;: The retention policy applies to the entire bucket.</p>
 </td>
 </tr>
 <tr>

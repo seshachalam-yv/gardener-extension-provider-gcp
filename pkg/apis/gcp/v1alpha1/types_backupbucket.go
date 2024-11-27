@@ -24,8 +24,6 @@ type ImmutableConfig struct {
 	// RetentionType specifies the type of retention for the backup bucket.
 	// Currently allowed values are:
 	// - "bucket": The retention policy applies to the entire bucket.
-	// Future plans include:
-	// - "object": The retention policy applies to individual objects within the bucket.
 	RetentionType string `json:"retentionType"`
 
 	// RetentionPeriod specifies the immutability retention period for the backup bucket.
