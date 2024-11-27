@@ -13,10 +13,10 @@ import (
 
 // BackupBucketConfig represents the configuration for a backup bucket.
 type BackupBucketConfig struct {
-	metav1.TypeMeta `json:",inline"`
+	metav1.TypeMeta
 
 	// Immutability defines the immutability config for the backup bucket.
-	Immutability ImmutableConfig `json:"immutability"`
+	Immutability ImmutableConfig
 }
 
 // ImmutableConfig represents the immutability configuration for a backup bucket.
@@ -24,14 +24,14 @@ type ImmutableConfig struct {
 	// RetentionType specifies the type of retention for the backup bucket.
 	// Currently allowed values are:
 	// - "bucket": The retention policy applies to the entire bucket.
-	RetentionType string `json:"retentionType"`
+	RetentionType string
 
 	// RetentionPeriod specifies the immutability retention period for the backup bucket.
 	// The minimum retention period is 24 hours as per Google Cloud Storage requirements.
 	// Reference: https://github.com/googleapis/google-cloud-go/blob/3005f5a86c18254e569b8b1782bf014aa62f33cc/storage/bucket.go#L1430-L1434
-	RetentionPeriod metav1.Duration `json:"retentionPeriod"`
+	RetentionPeriod metav1.Duration
 
 	// Locked indicates whether the immutable retention policy is locked for the backup bucket.
 	// If set to true, the retention policy cannot be removed or the retention period reduced, enforcing immutability.
-	Locked bool `json:"locked"`
+	Locked bool
 }
