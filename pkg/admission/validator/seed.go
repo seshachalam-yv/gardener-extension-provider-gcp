@@ -75,15 +75,18 @@ func (s *seedValidator) validateCreate(newSeed *core.Seed) error {
 	return nil
 }
 
-// validateUpdate validates the Seed object during an update operation.
-// It ensures that immutability policies are enforced by preventing:
-// - Disabling immutable settings once they are enabled.
-// - Reducing the retention period.
-// - Modifying the retention type.
+// validateUpdate validates updates to the Seed resource, ensuring that immutability settings for backup buckets
+// are correctly managed. It enforces constraints such as preventing the unlocking of retention policies,
+// disabling immutability once locked, and reduction of retention periods when policies are locked.
 func (s *seedValidator) validateUpdate(_ context.Context, oldSeed, newSeed *core.Seed) error {
-	oldbackupBucketConfig, err := admission.DecodeBackupBucketConfig(s.lenientDecoder, oldSeed.Spec.Backup.ProviderConfig)
+	oldBackupBucketConfig, err := admission.DecodeBackupBucketConfig(s.lenientDecoder, oldSeed.Spec.Backup.ProviderConfig)
 	if err != nil {
 		return fmt.Errorf("error decoding old BackupBucketConfig: %w", err)
+	}
+
+	// Case 1: No Previous Immutable Configuration
+	if oldBackupBucketConfig == nil || oldBackupBucketConfig.Immutability == (gcp.ImmutableConfig{}) {
+		return s.validateCreate(newSeed)
 	}
 
 	newBackupBucketConfig, err := admission.DecodeBackupBucketConfig(s.decoder, newSeed.Spec.Backup.ProviderConfig)
@@ -91,27 +94,35 @@ func (s *seedValidator) validateUpdate(_ context.Context, oldSeed, newSeed *core
 		return fmt.Errorf("error decoding new BackupBucketConfig: %w", err)
 	}
 
+	// Step 1: Validate New Configurations
 	allErrs := gcpvalidation.ValidateBackupBucketConfig(newBackupBucketConfig, field.NewPath("spec").Child("backup").Child("providerConfig"))
 	if len(allErrs) > 0 {
 		return fmt.Errorf("validation failed: %w", allErrs.ToAggregate())
 	}
 
-	// Ensure that immutable settings are not disabled
-	if (newBackupBucketConfig == nil || newBackupBucketConfig.Immutability == (gcp.ImmutableConfig{})) && oldbackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) {
-		return fmt.Errorf("disabling immutable settings is not allowed")
+	// Case 2: If Immutability Not Previously Locked
+	if !oldBackupBucketConfig.Immutability.Locked {
+		// Allow disabling immutability or other unrestricted updates.
+		return nil
 	}
 
-	if newBackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) && oldbackupBucketConfig.Immutability != (gcp.ImmutableConfig{}) {
-		// Ensure the Immutability.Locked cannot be set to false if it was previously set to true
-		if !newBackupBucketConfig.Immutability.Locked && oldbackupBucketConfig.Immutability.Locked {
-			return fmt.Errorf("immutable retention policy lock cannot be unlocked once it is locked. Please ensure the retention policy lock remains locked")
-		}
-
-		// Ensure the retention period is not reduced
-		if newBackupBucketConfig.Immutability.RetentionPeriod.Duration < oldbackupBucketConfig.Immutability.RetentionPeriod.Duration && newBackupBucketConfig.Immutability.Locked {
-			return fmt.Errorf("reducing the retention period from %v to %v is prohibited when the immutable retention policy is locked. Ensure the new retention period is not shorter than the existing one", oldbackupBucketConfig.Immutability.RetentionPeriod.Duration, newBackupBucketConfig.Immutability.RetentionPeriod.Duration)
-		}
+	// Case 3: Prevent Unlocking or Disabling Immutability When Locked
+	if newBackupBucketConfig == nil {
+		return fmt.Errorf("immutability cannot be disabled once it is locked")
+	}
+	if !newBackupBucketConfig.Immutability.Locked {
+		return fmt.Errorf("immutable retention policy lock cannot be unlocked once it is locked")
 	}
 
+	// Case 4: Prevent Retention Period Reduction When Locked
+	if newBackupBucketConfig.Immutability.RetentionPeriod.Duration < oldBackupBucketConfig.Immutability.RetentionPeriod.Duration {
+		return fmt.Errorf(
+			"reducing the retention period from %v to %v is prohibited when the immutable retention policy is locked",
+			oldBackupBucketConfig.Immutability.RetentionPeriod.Duration,
+			newBackupBucketConfig.Immutability.RetentionPeriod.Duration,
+		)
+	}
+
+	// All Validation Checks Passed
 	return nil
 }

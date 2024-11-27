@@ -94,6 +94,9 @@ func (s *storageClient) createBucket(ctx context.Context, bucket *storage.Bucket
 		UniformBucketLevelAccess: storage.UniformBucketLevelAccess{
 			Enabled: true,
 		},
+		SoftDeletePolicy: &storage.SoftDeletePolicy{
+			RetentionDuration: 0,
+		},
 	}
 
 	if err := bucket.Create(ctx, s.serviceAccount.ProjectID, bucketAttrs); err != nil {
@@ -101,7 +104,7 @@ func (s *storageClient) createBucket(ctx context.Context, bucket *storage.Bucket
 	}
 
 	// Lock the retention policy if specified
-	if retentionPolicy != nil {
+	if retentionPolicy != nil && retentionPolicy.IsLocked {
 		if err := s.lockBucketRetentionPolicy(ctx, bucket); err != nil {
 			return fmt.Errorf("failed to lock retention policy for bucket %q: %w", bucket.BucketName(), err)
 		}
@@ -118,18 +121,18 @@ func (s *storageClient) updateBucketIfNeeded(ctx context.Context, bucket *storag
 		}
 	}
 
-	// Check if the retention policy needs to be updated
-	retentionPolicyNeedsUpdate := false
-	if desiredRetentionPolicy != nil {
-		if attrs.RetentionPolicy == nil {
-			retentionPolicyNeedsUpdate = true
-		} else if attrs.RetentionPolicy.RetentionPeriod != desiredRetentionPolicy.RetentionPeriod {
-			retentionPolicyNeedsUpdate = true
-		}
+	// Determine if an update is required based on the desired and current retention policies.
+	isUpdateRequired := true
+	if desiredRetentionPolicy == nil && attrs.RetentionPolicy == nil {
+		isUpdateRequired = false
+	}
+
+	if desiredRetentionPolicy != nil && attrs.RetentionPolicy != nil && *desiredRetentionPolicy == *attrs.RetentionPolicy {
+		isUpdateRequired = false
 	}
 
 	// Perform the update if needed
-	if retentionPolicyNeedsUpdate {
+	if isUpdateRequired {
 		bucketAttrsToUpdate := storage.BucketAttrsToUpdate{
 			RetentionPolicy: desiredRetentionPolicy,
 		}
@@ -142,7 +145,7 @@ func (s *storageClient) updateBucketIfNeeded(ctx context.Context, bucket *storag
 	}
 
 	// Lock the retention policy if specified and not already locked
-	if desiredRetentionPolicy != nil && !attrs.RetentionPolicy.IsLocked {
+	if desiredRetentionPolicy != nil && desiredRetentionPolicy.IsLocked && !attrs.RetentionPolicy.IsLocked {
 		if err := s.lockBucketRetentionPolicy(ctx, bucket); err != nil {
 			return fmt.Errorf("failed to lock retention policy for bucket %q: %w", bucket.BucketName(), err)
 		}

@@ -6,11 +6,10 @@ package validator_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"encoding/json"
 
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
-	"github.com/gardener/gardener/pkg/apis/core"
+	core "github.com/gardener/gardener/pkg/apis/core"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	mockclient "github.com/gardener/gardener/third_party/mock/controller-runtime/client"
 	mockmanager "github.com/gardener/gardener/third_party/mock/controller-runtime/manager"
@@ -26,16 +25,17 @@ import (
 
 var _ = Describe("Seed Validator", func() {
 	var (
-		mgr           *mockmanager.MockManager
-		seedValidator extensionswebhook.Validator
 		ctrl          *gomock.Controller
+		mgr           *mockmanager.MockManager
 		c             *mockclient.MockClient
+		seedValidator extensionswebhook.Validator
+		scheme        *runtime.Scheme
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 
-		scheme := runtime.NewScheme()
+		scheme = runtime.NewScheme()
 		Expect(core.AddToScheme(scheme)).To(Succeed())
 		Expect(apisgcp.AddToScheme(scheme)).To(Succeed())
 		Expect(apisgcpv1alpha1.AddToScheme(scheme)).To(Succeed())
@@ -43,312 +43,199 @@ var _ = Describe("Seed Validator", func() {
 		c = mockclient.NewMockClient(ctrl)
 
 		mgr = mockmanager.NewMockManager(ctrl)
-		mgr.EXPECT().GetScheme().Return(scheme).Times(2)
-		mgr.EXPECT().GetClient().Return(c)
+		mgr.EXPECT().GetScheme().Return(scheme).AnyTimes()
+		mgr.EXPECT().GetClient().Return(c).AnyTimes()
 		seedValidator = validator.NewSeedValidator(mgr)
 	})
 
-	DescribeTable("ValidateUpdate",
-		func(oldSeed, newSeed *core.Seed, expectedError error) {
-			err := seedValidator.Validate(context.Background(), newSeed, oldSeed)
-			if expectedError != nil {
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal(expectedError.Error()))
-			} else {
-				Expect(err).NotTo(HaveOccurred())
+	// Helper function to generate Seed objects
+	generateSeed := func(retentionType, retentionPeriod string, locked bool, isImmutableConfigured bool) *core.Seed {
+		var config *runtime.RawExtension
+		if isImmutableConfigured {
+			immutability := map[string]interface{}{
+				"retentionType":   retentionType,
+				"retentionPeriod": retentionPeriod,
 			}
-		},
-		Entry("should allow update when immutable settings are unchanged",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should not allow disabling immutable settings",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: nil,
-					},
-				},
-			},
-			errors.New("disabling immutable settings is not allowed"),
-		),
-		Entry("should return error when old BackupBucketConfig decoding fails",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`invalid`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("error decoding old BackupBucketConfig: couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }"),
-		),
-		Entry("should return error when new BackupBucketConfig decoding fails",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`invalid`),
-						},
-					},
-				},
-			},
-			errors.New("error decoding new BackupBucketConfig: couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }"),
-		),
-		Entry("should return error when new BackupBucketConfig validation fails",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"invalid","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionType: Invalid value: \"invalid\": retentionType must be 'bucket'"),
-		),
-		Entry("should not allow unlocking immutable retention policy lock",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":false}}`),
-						},
-					},
-				},
-			},
-			errors.New("immutable retention policy lock cannot be unlocked once it is locked. Please ensure the retention policy lock remains locked"),
-		),
-		Entry("should allow update when retention period is unchanged and lock remains true",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should allow update when retention period is increased and lock remains true",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"120h","locked":true}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should allow decreasing the retention period if it's not locked",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":false}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h","locked":false}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should not allow decreasing the retention period if it's locked",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"48h","locked":true}}`),
-						},
-					},
-				},
-			},
-			errors.New("reducing the retention period from 96h0m0s to 48h0m0s is prohibited when the immutable retention policy is locked. Ensure the new retention period is not shorter than the existing one"),
-		),
-	)
+			if retentionPeriod != "" {
+				immutability["locked"] = locked
+			}
+			configMap := map[string]interface{}{
+				"apiVersion":   "gcp.provider.extensions.gardener.cloud/v1alpha1",
+				"kind":         "BackupBucketConfig",
+				"immutability": immutability,
+			}
+			raw, err := json.Marshal(configMap)
+			Expect(err).NotTo(HaveOccurred())
+			config = &runtime.RawExtension{
+				Raw: raw,
+			}
+		} else {
+			config = nil
+		}
 
-	var _ = DescribeTable("ValidateCreate",
-		func(newSeed *core.Seed, expectedError error) {
-			err := seedValidator.Validate(context.Background(), newSeed, nil)
-			if expectedError != nil {
-				Expect(err).To(HaveOccurred())
-				fmt.Println(err)
-				fmt.Println(expectedError)
-				Expect(err.Error()).Should(ContainSubstring(expectedError.Error()))
-			} else {
+		return &core.Seed{
+			Spec: core.SeedSpec{
+				Backup: &core.SeedBackup{
+					ProviderConfig: config,
+				},
+			},
+		}
+	}
+
+	Describe("ValidateUpdate", func() {
+		DescribeTable("Valid update scenarios",
+			func(oldSeed, newSeed *core.Seed) {
+				err := seedValidator.Validate(context.Background(), newSeed, oldSeed)
 				Expect(err).NotTo(HaveOccurred())
-			}
-		},
-		Entry("should allow creation with valid immutable settings",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h"}}`),
+			},
+			Entry("Immutable settings unchanged",
+				generateSeed("bucket", "96h", false, true),
+				generateSeed("bucket", "96h", false, true),
+			),
+			Entry("Retention period increased while locked",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "120h", true, true),
+			),
+			Entry("Retention period decreased when not locked",
+				generateSeed("bucket", "96h", false, true),
+				generateSeed("bucket", "48h", false, true),
+			),
+			Entry("Adding immutability to an existing bucket without it",
+				generateSeed("", "", false, false),
+				generateSeed("bucket", "96h", false, true),
+			),
+			Entry("Adding immutability with locked=true",
+				generateSeed("", "", false, false),
+				generateSeed("bucket", "96h", true, true),
+			),
+			Entry("Retention period exactly at minimum (24h)",
+				generateSeed("bucket", "24h", false, true),
+				generateSeed("bucket", "24h", false, true),
+			),
+			Entry("Transitioning from locked=false to locked=true",
+				generateSeed("bucket", "96h", false, true),
+				generateSeed("bucket", "96h", true, true),
+			),
+			Entry("Disabling immutability when not locked",
+				generateSeed("bucket", "96h", false, true),
+				generateSeed("", "", false, false),
+			),
+		)
+
+		DescribeTable("Invalid update scenarios",
+			func(oldSeed, newSeed *core.Seed, expectedError string) {
+				err := seedValidator.Validate(context.Background(), newSeed, oldSeed)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(expectedError))
+			},
+			Entry("Disabling immutable settings is not allowed if locked",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("", "", false, false),
+				"immutability cannot be disabled once it is locked",
+			),
+			Entry("Unlocking a locked retention policy is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "96h", false, true),
+				"immutable retention policy lock cannot be unlocked once it is locked",
+			),
+			Entry("Reducing retention period when locked is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "48h", true, true),
+				"reducing the retention period from",
+			),
+			Entry("Changing retentionType is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("object", "96h", true, true),
+				"must be 'bucket'",
+			),
+			Entry("Retention period below minimum when not locked is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "23h", false, true),
+				"must be a positive duration greater than 24h",
+			),
+			Entry("Retention period below minimum when locked is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "23h", true, true),
+				"must be a positive duration greater than 24h",
+			),
+			Entry("Invalid retention period format when locked is not allowed",
+				generateSeed("bucket", "96h", true, true),
+				generateSeed("bucket", "invalid", true, true),
+				"invalid duration",
+			),
+			Entry("Invalid retention period format when not locked is not allowed",
+				generateSeed("bucket", "96h", false, true),
+				generateSeed("bucket", "invalid", false, true),
+				"invalid duration",
+			),
+		)
+	})
+
+	Describe("ValidateCreate", func() {
+		DescribeTable("Valid creation scenarios",
+			func(newSeed *core.Seed) {
+				err := seedValidator.Validate(context.Background(), newSeed, nil)
+				Expect(err).NotTo(HaveOccurred())
+			},
+			Entry("Creation with valid immutable settings",
+				generateSeed("bucket", "96h", false, true),
+			),
+			Entry("Creation without immutable settings",
+				generateSeed("", "", false, false),
+			),
+			Entry("Creation with locked immutable settings",
+				generateSeed("bucket", "96h", true, true),
+			),
+			Entry("Retention period exactly at minimum (24h)",
+				generateSeed("bucket", "24h", false, true),
+			),
+		)
+
+		DescribeTable("Invalid creation scenarios",
+			func(newSeed *core.Seed, expectedError string) {
+				err := seedValidator.Validate(context.Background(), newSeed, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(expectedError))
+			},
+			Entry("Invalid retention type",
+				generateSeed("invalid", "96h", false, true),
+				"must be 'bucket'",
+			),
+			Entry("Invalid retention period format",
+				&core.Seed{
+					Spec: core.SeedSpec{
+						Backup: &core.SeedBackup{
+							ProviderConfig: &runtime.RawExtension{
+								Raw: []byte(`{
+									"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1",
+									"kind":"BackupBucketConfig",
+									"immutability":{
+										"retentionType":"bucket",
+										"retentionPeriod":"invalid"
+									}
+								}`),
+							},
 						},
 					},
 				},
-			},
-			nil,
-		),
-		Entry("should not allow creation with invalid retention type",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"invalid","retentionPeriod":"96h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionType: Invalid value: \"invalid\": retentionType must be 'bucket'"),
-		),
-		Entry("should not allow creation with invalid retention period format",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"invalid"}}`),
-						},
-					},
-				},
-			},
-			errors.New("error decoding BackupBucketConfig: time: invalid duration \"invalid\""),
-		),
-		Entry("should not allow creation with negative retention period",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"-96h"}}`),
-						},
-					},
-				},
-			},
-			errors.New("validation failed: spec.backup.providerConfig.immutability.retentionPeriod: Invalid value: \"-96h0m0s\": retentionPeriod must be a positive duration greater than 24h"),
-		),
-		Entry("should allow creation without immutable settings",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: nil,
-					},
-				},
-			},
-			nil,
-		),
-		Entry("should allow creation with locked immutable settings",
-			&core.Seed{
-				Spec: core.SeedSpec{
-					Backup: &core.SeedBackup{
-						ProviderConfig: &runtime.RawExtension{
-							Raw: []byte(`{"apiVersion":"gcp.provider.extensions.gardener.cloud/v1alpha1","kind":"BackupBucketConfig","immutability":{"retentionType":"bucket","retentionPeriod":"96h","locked":true}}`),
-						},
-					},
-				},
-			},
-			nil,
-		),
-	)
+				"invalid duration",
+			),
+			Entry("Negative retention period",
+				generateSeed("bucket", "-96h", false, true),
+				"must be a positive duration greater than 24h",
+			),
+			Entry("Retention period below minimum when not locked",
+				generateSeed("bucket", "23h", false, true),
+				"must be a positive duration greater than 24h",
+			),
+			Entry("Retention period below minimum when locked",
+				generateSeed("bucket", "23h", true, true),
+				"must be a positive duration greater than 24h",
+			),
+			Entry("Invalid retention period format when locked is not allowed",
+				generateSeed("bucket", "invalid", true, true),
+				"invalid duration",
+			),
+		)
+	})
 })
